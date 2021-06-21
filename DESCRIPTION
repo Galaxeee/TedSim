@@ -1,0 +1,36 @@
+Package: TedSim
+Title: Temporal Dynamics Simulation of scRNA-seq and CRISR/Cas9 lineage barcodes
+Version: 0.0.0.9000
+Authors@R: 
+    person(given = "Xinhai",
+           family = "Pan",
+           role = c("aut", "cre"),
+           email = "xpan78@gatech.edu",
+           comment = c(ORCID = "YOUR-ORCID-ID"))
+Description: A simulator of simultaneous scRNA-seq and CRISPR/Cas9 genome editing that modelsthe biological process of cell division and differentiation to form populations of cells as well as cell lineage trees. TedSim simulates the cell division events from the root cell to present-day cells. Asymmetric divisions guided by a cell differentiation tree will lead to different cell types. For each cell in the cell division tree, its identity, gene-expression profile and lineage tracing barcode are simulated side by side.
+License: `use_mit_license()`, `use_gpl3_license()` or friends to
+    pick a license
+Encoding: UTF-8
+LazyData: true
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.1.1
+Imports: 
+    dplyr,
+    ape,
+    umap,
+    cluster,
+    dyno,
+    RColorBrewer,
+    plyr,
+    phytools,
+    ggplot2,
+    reshape,
+    roxygen2,
+    SummarizedExperiment,
+    DrImpute
+Depends: 
+    R (>= 3.5.0)
+Suggests: 
+    knitr,
+    rmarkdown
+VignetteBuilder: knitr

@@ -1,0 +1,244 @@
+---
+title: "FitObservedCounts"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{FitObservedCounts}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+library(devtools)
+devtools::load_all("~/TedSim/TedSim_1.00/TedSim")
+#library(TedSim)
+library(dplyr)
+library(Seurat)
+library(ggplot2)
+library(reshape2)
+library(ctc)
+```
+# Fit the state tree and the branching possibilities
+```{r}
+# Load the real dataset
+data(larvae4_sub)
+p1 <- DimPlot(larvae4_sub , reduction = "umap", pt.size = 0.5) + ggtitle(label = "UMAP")
+p1
+```
+
+```{r}
+#Calculate cell type specific properties of the dataset
+box_data_cell <- data.frame(celltype = character(),UMI_per_cell = numeric(),zeros_per_cell = numeric())
+for (cluster in c("Epidermal cells A","Neutrophils","Macrophages","Keratinocytes A","Cone cells","Erythrocytes A","Endothelial cells","Chondrocytes A","Hepatocytes A","Lymphocytes A")){
+  larvae4_ct <- subset(x = larvae4_sub, idents = c(cluster))
+  counts_ct <- as.matrix(GetAssayData(object = larvae4_ct, slot = "counts"))
+  #temp_data_gene <- data.frame(celltype = rep(cluster,length(rowMeans(counts_sub))),UMI_per_gene =  rowMeans(counts_sub),zeros_per_gene = rowMeans(counts_sub == 0))
+  temp_data_cell <- data.frame(celltype = rep(cluster,length(colSums(counts_ct))),UMI_per_cell =  colMeans(counts_ct),zeros_per_cell = colMeans(counts_ct == 0),fill = rep("larvae4",length(colMeans(counts_ct))))
+  #box_data_gene <- rbind(box_data_gene,temp_data_gene)
+  box_data_cell <- rbind(box_data_cell,temp_data_cell)
+}
+
+zero_means <- aggregate(box_data_cell$zeros_per_cell, list(box_data_cell$celltype), mean)
+UMI_means <- aggregate(box_data_cell$UMI_per_cell, list(box_data_cell$celltype), mean)
+
+
+#Get state tree by hierachical clustering on the state means
+ct_means <- AverageExpression(larvae4_sub,slot = 'scale.data')
+ct_tree <- hclust(dist(t(ct_means$RNA)),method = 'ward.D')
+phyla <- hc2Newick(ct_tree, flat=TRUE)
+phyla <- read.tree(text = phyla)
+phyla$edge.length <- ceiling(phyla$edge.length)
+phyla$edge.length[phyla$edge.length == 0] <- 1
+cell_table <- as.data.frame(table(Idents(larvae4_sub)))
+cell_table$Var1 <- gsub(" ", "", cell_table$Var1, fixed = TRUE)
+
+p_edge <- BranchCal(phyla,cell_table)
+
+plot(phyla)
+nodelabels()
+```
+
+#Simulate datasets using the state tree and the branching possibilities
+```{r}
+#20 datasets are generated (Cell Identity Factors), and the datasets are merged to generate true counts and observed counts together
+n_samples <-20
+
+#parameter settings
+ncells <- 1024
+N_nodes <- 2*ncells-2
+ngenes <- 500
+p_a <- 1
+n_cif <- 30
+n_diff <- 20
+cif_step <- 1
+p_d <- 0
+N_char <- 32
+max_walk <- 10
+seeds <- sample(1:9999,n_samples)
+
+#Initialize data and cell meta
+states_leaves_combined <- data.frame(parent = numeric(), cluster = character(),depth = numeric(),cellID = numeric())
+counts_combined <- c()
+cell_meta_combined <- c()
+scale_s_combined <- c()
+cifs_combined <- lapply(c(1:3),function(parami){
+  matrix(ncol = n_cif,nrow = n_samples*ncells)
+})
+
+#Simulate shared State Identity Factors for all datasets
+SIF_res <- SIFGenerate(phyla,n_diff,step = cif_step)
+
+#Generate Cell Identity Factors of 20 lineages/datasets
+for (i in 1:n_samples){
+  set.seed(seeds[i])
+  print(seeds[i])
+  cifs <- SimulateCIFs(ncells,phyla,p_a = p_a,n_CIF = n_cif,n_diff = n_diff,step = cif_step,p_d = p_d, Sigma = 0.5, N_char = 32, max_walk = max_walk, p_edge = p_edge, SIF_res = SIF_res, unif_on = FALSE)
+  for (parami in c(1:3)){
+    cif_leaves_all <- cifs[[1]][[parami]][c(1:ncells),]
+    cifs_combined[[parami]][((i-1)*ncells + 1):(i*ncells),] <- cif_leaves_all
+  }
+  cell_meta_combined <- rbind(cell_meta_combined,cifs[[2]][1:ncells,])
+  #cif_res <- list(cifs_combined,cifs[[2]])
+  states <- cifs[[2]]
+  states <- states[1:N_nodes,]
+  states_leaves <- states[1:ncells,]
+
+  #Fit scale_s to specific cell type's based on their UMI_means
+  states_uniq <- c(5,2,1,4,3,7,6,9,10,8,11:19)
+  scale_s_states <- c(0.03 * UMI_means$x,rep(0.001,9))
+  scale_s <- states_leaves[,2]
+  scale_s[scale_s %in% states_uniq] <- scale_s_states[match(scale_s, states_uniq, nomatch = 0)]
+  #true_counts_res <- CIF2Truecounts(ngenes = 500,ncif = n_cif,ge_prob = 0.3,ncells = ncells, cif_res = cif_res, prop_hge = 0.03, mean_hge = 6,scale_s = scale_s)
+
+  #assign cell types
+  state_intermediate <- c(5,2,1,4,3,7,6,9,10,8,seq(11,19))
+  state_merge_intermediate <- c(c("Epidermal cells A","Neutrophils","Macrophages","Keratinocytes A","Cone cells","Erythrocytes A","Endothelial cells","Chondrocytes A","Hepatocytes A","Lymphocytes A"),rep("intermediate",9))
+  new_states <- states_leaves[,2]
+  new_states[new_states %in% state_intermediate] <- state_merge_intermediate[match(new_states, state_intermediate, nomatch = 0)]
+  states_leaves[,2] <- new_states
+  
+  scale_s_combined <- c(scale_s_combined,scale_s)
+  
+  states_leaves_combined <- rbind(states_leaves_combined,states_leaves)
+}
+cifs_combined <- list(cifs_combined,cell_meta_combined)
+
+true_counts_res <- CIF2Truecounts(ngenes = 500,ncif = n_cif,ge_prob = 0.3,ncells = ncells * n_samples, cif_res = cifs_combined, prop_hge = 0.03, mean_hge = 6,scale_s = scale_s_combined)
+umap_true_counts <- PlotUmap(meta=states_leaves_combined, data=log2(true_counts_res[[1]]+1), n_pc=30, label='cluster', saving = F, plotname="Differentiating population (true counts)")
+umap_true_counts[[2]] + ggtitle("Continuous population (true counts)") + xlab("UMAP1") + ylab("UMAP 2") +  theme(axis.text = element_text(size = 20), axis.title = element_text(size = 30),legend.text = element_text(size = 20))
+
+data(gene_len_pool)
+gene_len <- sample(gene_len_pool, ngenes, replace = FALSE)
+observed_counts <- True2ObservedCounts(true_counts=true_counts_res[[1]], meta_cell=true_counts_res[[3]], protocol="UMI", alpha_mean=0.1, alpha_sd=0.1, gene_len=gene_len, depth_mean=1e5, depth_sd=3e3)
+```
+#Compare the properties of simulated datasets and the real dataset
+```{r}
+# Read the pre-computed data (true counts)
+states_leaves_combined <- read.table(file = "./cell_meta_larvae4_20.txt",sep = "\t")
+counts_combined <- read.table(file = "./counts_larvae4_20.txt",sep = "\t",header = TRUE)
+observed_counts <- read.table(file = "./observed_counts_larvae4_20.txt",sep = "\t",header = TRUE)
+
+# Calculate and compare cell type composition with the real data
+cell_type_decomp_tedsim <- table(states_leaves_combined[,2])
+cell_type_decomp_tedsim <- as.data.frame(cell_type_decomp_tedsim/sum(cell_type_decomp_tedsim))
+cell_type_decomp_tedsim <- cell_type_decomp_tedsim[cell_type_decomp_tedsim$Var1 != "intermediate",]
+cell_type_decomp_tedsim$fill <- rep("TedSim",length(cell_type_decomp_tedsim$Var1))
+cell_type_decomp_larvae <- table(Idents(larvae4_sub))
+cell_type_decomp_larvae <- as.data.frame(cell_type_decomp_larvae/sum(cell_type_decomp_larvae))
+cell_type_decomp_larvae$fill <- rep("Larvae4",length(cell_type_decomp_larvae$Var1))
+cell_type_decomp <- rbind(cell_type_decomp_tedsim,cell_type_decomp_larvae)
+p <- ggplot(cell_type_decomp, aes(Var1, y = Freq, fill = fill))
+p <- p + geom_bar(aes(x=Var1,y=Freq,fill = fill),stat="identity",position = 'dodge') + labs(fill = " ")+ ylab("Percentage of cells")
+p + ylim(0,1) + theme(axis.text = element_text(size = 20), axis.title = element_text(size = 30),legend.text = element_text(size = 20))
+#ggsave('./output/cell_type_compare.png',width = 2300,height = 700)
+```
+```{r}
+# Test different technical noise levels on the datasets
+observed_counts <- True2ObservedCounts(true_counts=true_counts_res[[1]], meta_cell=true_counts_res[[3]], protocol="UMI", alpha_mean=0.1, alpha_sd=0.1, gene_len=gene_len, depth_mean=1e5, depth_sd=3e3)
+```
+
+```{r}
+box_data_gene <- data.frame(celltype = character(),UMI_per_gene = numeric(),zeros_per_gene = numeric())
+box_data_cell <- data.frame(celltype = character(),UMI_per_cell = numeric(),zeros_per_cell = numeric())
+cell_Types <- c("Epidermal cells A","Neutrophils","Macrophages","Keratinocytes A","Cone cells","Erythrocytes A","Endothelial cells","Chondrocytes A","Hepatocytes A","Lymphocytes A")
+for (cluster in cell_Types){
+  observed_counts_sub <- observed_counts[,states_leaves_combined[,2] == cluster]
+  observed_counts_sub <- log2(observed_counts_sub+1)
+  temp_data_gene <- data.frame(celltype = rep(cluster,length(rowMeans(observed_counts_sub))),UMI_per_gene =  rowMeans(observed_counts_sub),zeros_per_gene = rowMeans(observed_counts_sub == 0))
+  temp_data_cell <- data.frame(celltype = rep(cluster,length(colMeans(observed_counts_sub))),UMI_per_cell =  colMeans(observed_counts_sub),zeros_per_cell = colMeans(observed_counts_sub == 0))
+  box_data_gene <- rbind(box_data_gene,temp_data_gene)
+  box_data_cell <- rbind(box_data_cell,temp_data_cell)
+}
+box_data_cell$fill <- rep("TedSim",length(box_data_cell$UMI_per_cell))
+box_data_gene$fill <- rep("TedSim",length(box_data_gene$UMI_per_gene))
+
+for (cluster in c("Epidermal cells A","Neutrophils","Macrophages","Keratinocytes A","Cone cells","Erythrocytes A","Endothelial cells","Chondrocytes A","Hepatocytes A","Lymphocytes A")){
+  larvae4_ct <- subset(x = larvae4_sub, idents = c(cluster))
+  counts_sub <- as.matrix(GetAssayData(object = larvae4_ct, slot = "counts"))
+  counts_sub <- log2(counts_sub+1)
+  temp_data_gene <- data.frame(celltype = rep(cluster,length(rowMeans(counts_sub))),UMI_per_gene =  rowMeans(counts_sub),zeros_per_gene = rowMeans(counts_sub == 0),fill = rep("larvae4",length(rowMeans(counts_sub))))
+  temp_data_cell <- data.frame(celltype = rep(cluster,length(colSums(counts_sub))),UMI_per_cell =  colMeans(counts_sub),zeros_per_cell = colMeans(counts_sub == 0),fill = rep("larvae4",length(colMeans(counts_sub))))
+  box_data_gene <- rbind(box_data_gene,temp_data_gene)
+  box_data_cell <- rbind(box_data_cell,temp_data_cell)
+}
+
+p <- ggplot(box_data_cell, aes(celltype, UMI_per_cell,fill = fill))
+p <- p + geom_boxplot(aes(fill = box_data_cell$fill)) + labs(fill="") + ylab("log transformed count per cell")
+p+ theme(axis.text = element_text(size = 20), axis.title = element_text(size = 30),legend.text = element_text(size = 20))
+#ggsave('./tedsim_plots_paper/larvae_4/counts_per_gene_larvae4_0.1.png',width = 2200,height = 700, limitsize = FALSE)
+p <- ggplot(box_data_cell, aes(celltype, zeros_per_cell,fill = fill))
+p <- p + geom_boxplot(aes(fill = box_data_cell$fill)) + labs(fill="") + ylab("zero percentage per cell")
+p + ylim(0,1) +  theme(axis.text = element_text(size = 20), axis.title = element_text(size = 30),legend.text = element_text(size = 20))
+#ggsave('./output/zeros_larvae4_0.1.png',width = 2200,height = 700)
+
+p <- ggplot(box_data_gene, aes(celltype, UMI_per_gene,fill = fill))
+p <- p + geom_boxplot(aes(fill = box_data_gene$fill)) + labs(fill="") + ylab("log transformed count per gene")
+p+ theme(axis.text = element_text(size = 20), axis.title = element_text(size = 30),legend.text = element_text(size = 20))
+#ggsave('./tedsim_plots_paper/larvae_4/counts_per_gene_larvae4_0.1.png',width = 2200,height = 700, limitsize = FALSE)
+p <- ggplot(box_data_gene, aes(celltype, zeros_per_gene,fill = fill))
+p <- p + geom_boxplot(aes(fill = box_data_gene$fill)) + labs(fill="") + ylab("zero percentage per gene")
+p + ylim(0,1) +  theme(axis.text = element_text(size = 20), axis.title = element_text(size = 30),legend.text = element_text(size = 20))
+
+
+#ggsave('./tedsim_plots_paper/larvae_4/umap_true_counts_larvae4.png',width = 1000,height = 700)
+
+```
+
+```{r}
+# Compare cross-cluster distances between simulated datasets and the real dataset
+average_expression <- c()
+average_expression_real <- c()
+cluster_list <- c("Epidermal cells A","Neutrophils","Macrophages","Keratinocytes A","Cone cells","Erythrocytes A","Endothelial cells","Chondrocytes A","Hepatocytes A","Lymphocytes A")
+for (cluster in cluster_list){
+  observed_counts_sub <- observed_counts[,states_leaves_combined[,2] == cluster]
+  average_expression <- rbind(average_expression, rowMeans(observed_counts_sub))
+  
+  larvae4_ct <- subset(x = larvae4_sub, idents = c(cluster))
+  counts_sub <- as.matrix(GetAssayData(object = larvae4_ct, slot = "counts"))
+  average_expression_real <- rbind(average_expression_real, rowMeans(counts_sub))
+}
+
+rownames(average_expression) <- cluster_list
+cell_type_cor <- round(cor(t(average_expression)),2)
+cell_type_cor_melt <- melt(cell_type_cor)
+p <- ggplot(data = cell_type_cor_melt, aes(x=Var1,y=Var2,fill=value))
+p <- p + geom_tile() + xlab("") +ylab("")
+p+  theme(axis.text.x = element_text(angle = 90),axis.text = element_text(size = 20), axis.title = element_text(size = 30),legend.text = element_text(size = 20), legend.title = element_text(size = 25))
+
+
+rownames(average_expression_real) <- cluster_list
+cell_type_cor_real <- round(cor(t(average_expression_real)),2)
+cell_type_cor_melt_real <- melt(cell_type_cor_real)
+p <- ggplot(data = cell_type_cor_melt_real, aes(x=Var1,y=Var2,fill=value))
+p <- p + geom_tile() + xlab("") +ylab("")
+p+  theme(axis.text.x = element_text(angle = 90),axis.text = element_text(size = 20), axis.title = element_text(size = 30),legend.text = element_text(size = 20), legend.title = element_text(size = 25))
+
+```
+
+

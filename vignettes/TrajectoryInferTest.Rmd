@@ -1,0 +1,142 @@
+---
+title: "TrajectoryInferTest"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{TrajectoryInferTest}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+library(devtools)
+devtools::load_all("~/TedSim/TedSim_1.00/TedSim")
+#library(TedSim)
+
+library(dyno)
+library(umap)
+library(Kendall)
+library(dyneval)
+library(ape)
+library(entropy)
+```
+
+# Parameter settings/ Visualize SIF mean using PCA
+```{r}
+ncells <- 1024
+phyla <- read.tree(text='(((t1:2, t2:2):1, (t3:2, t4:2):1):1);')
+#phyla <- read.tree(text='((t1:2, t2:2):1, (t3:2, t4:2):1):2;')
+N_nodes <- 2*ncells-2
+ngenes <- 500
+max_walk <- 6
+p_a <- 0.6
+n_cif <- 30
+n_diff <- 20
+cif_step <- 0.25
+p_d <- 0
+N_char <- 32
+set.seed(145)
+
+returnlist <- SIFGenerate(phyla,n_diff,step = cif_step)
+sif_mean_raw <- returnlist$sif_mean_raw
+
+sif_label <- sif_mean_raw[[1]][,2]
+sif_mean_raw <- lapply(sif_mean_raw,function(X){
+  X[,4]
+})
+sif_mean_raw <- do.call(cbind,sif_mean_raw)
+sif_pca <- prcomp(sif_mean_raw)
+
+plot_pca <- data.frame(label=sif_label,x=sif_pca$x[,1],y=sif_pca$x[,2])
+p <- ggplot(plot_pca, aes(x, y))
+p <- p + geom_point(aes(colour = factor(plot_pca$label)),shape=20) + labs(color='cell states')
+p <- p+theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+             panel.background = element_blank(), axis.line = element_line(colour = "black"))
+p
+```
+#simulate cifs with the SIF means
+```{r}
+cifs <- SimulateCIFs(ncells,phyla,p_a = p_a,n_CIF = n_cif,n_diff = n_diff,step = cif_step,p_d = p_d, Sigma = 0.5, N_char = 32, max_walk = max_walk, SIF_res = returnlist, unif_on = FALSE)
+
+#We only need the leaf cells for experiments
+cif_leaves <- lapply(c(1:3),function(parami){
+  cif_leaves_all <- cifs[[1]][[parami]][c(1:ncells),]
+  return(cif_leaves_all)
+})
+cif_res <- list(cif_leaves,cifs[[2]])
+states <- cifs[[2]]
+states <- states[1:N_nodes,]
+states_leaves <- states[1:ncells,]
+muts <- cifs[[7]]
+rownames(muts) <- paste("cell",states[,4],sep = "_")
+muts_leaves <- muts[1:ncells,]
+
+#simulate true counts
+true_counts_res <- CIF2Truecounts(ngenes = 500,ncif = n_cif,ge_prob = 0.3,ncells = ncells, cif_res = cif_res)
+```
+
+# Visualize True Counts using tSNE/UMAP
+```{r}
+tsne_true_counts <- PlotTsne(meta=states_leaves, data=log2(true_counts_res[[1]]+1), cif_type="continuous", n_pc=30, label='cluster', saving = F, plotname="Discrete population (true counts)")
+umap_true_counts <- PlotUmap(meta=states_leaves, data=log2(true_counts_res[[1]]+1), n_pc=30, label='cluster', saving = F, plotname="Differentiating population (true counts)")
+
+tsne_true_counts[[2]] + ggtitle("Discrete population (true counts)") + xlab("tSNE 1") + ylab("tSNE 2") +  theme(axis.text = element_text(size = 20), axis.title = element_text(size = 30),legend.text = element_text(size = 20))
+umap_true_counts[[2]] + ggtitle("Continuous population (true counts)") + xlab("UMAP 1") + ylab("UMAP 2") +  theme(axis.text = element_text(size = 20), axis.title = element_text(size = 30),legend.text = element_text(size = 20))
+```
+# Running trajectory inference methods using dynverse package
+```{r}
+# preprocesing
+counts_t <- t(true_counts_res[[1]])
+meta <- states_leaves
+
+rownames(counts_t) <- paste("cell",  meta[,'cellID'], sep = "_")
+colnames(counts_t) <- paste("gene", seq(1, ncol(counts_t)), sep = "_")
+
+custom.config = umap.defaults
+custom.config$min_dist = 0.3
+pca_res <- prcomp(counts_t, scale. = TRUE)
+umap_res_leaves <-umap(pca_res$x[,1:50],custom.config)
+
+dataset <- wrap_expression(
+  counts = counts_t,
+  expression = log2(counts_t+1)
+)
+groups <- cbind(rownames(counts_t),meta[,'cluster'])
+colnames(groups) <- c("cell_id", "group_id")
+dataset <- add_prior_information(
+  dataset = dataset,
+  start_id = paste("cell",sample(meta[meta[,'cluster']==6,4],1),sep = "_"),
+  groups_id = as.data.frame(groups),
+)
+dataset <- add_dimred(
+  dataset,
+  umap_res_leaves$layout
+)
+
+# 
+phyla <- read.tree(text='(((t1:2,t2:2):1, (t3:2, t4:2):1):1);')
+true_net <- data.frame(from=phyla$edge[,1],
+                       to=phyla$edge[,2],
+                       length=phyla$edge.length,
+                       directed=rep(TRUE, 7), stringsAsFactors = F)
+
+# Selecting methods
+method <- "paga_tree"
+trajectory <- infer_trajectory(dataset,method,verbose = TRUE, give_priors = c("start_id","group_id"))
+
+p <- plot_dimred(trajectory, dimred = dataset$dimred, grouping = dataset$prior_information$groups_id)
+p
+```
+```{r}
+# Calculate Kendall's tau and HIM scores 
+true_state_depth <- meta$depth
+tau <- cor.test(inferred_pseudotime, true_state_depth, method="kendall") 
+him <- calculate_him(true_net, trajectory$milestone_network)
+```
+
