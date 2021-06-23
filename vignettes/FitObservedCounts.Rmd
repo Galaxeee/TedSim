@@ -132,10 +132,6 @@ cifs_combined <- list(cifs_combined,cell_meta_combined)
 true_counts_res <- CIF2Truecounts(ngenes = 500,ncif = n_cif,ge_prob = 0.3,ncells = ncells * n_samples, cif_res = cifs_combined, prop_hge = 0.03, mean_hge = 6,scale_s = scale_s_combined)
 umap_true_counts <- PlotUmap(meta=states_leaves_combined, data=log2(true_counts_res[[1]]+1), n_pc=30, label='cluster', saving = F, plotname="Differentiating population (true counts)")
 umap_true_counts[[2]] + ggtitle("Continuous population (true counts)") + xlab("UMAP1") + ylab("UMAP 2") +  theme(axis.text = element_text(size = 20), axis.title = element_text(size = 30),legend.text = element_text(size = 20))
-
-data(gene_len_pool)
-gene_len <- sample(gene_len_pool, ngenes, replace = FALSE)
-observed_counts <- True2ObservedCounts(true_counts=true_counts_res[[1]], meta_cell=true_counts_res[[3]], protocol="UMI", alpha_mean=0.1, alpha_sd=0.1, gene_len=gene_len, depth_mean=1e5, depth_sd=3e3)
 ```
 #Compare the properties of simulated datasets and the real dataset
 ```{r}
@@ -160,7 +156,10 @@ p + ylim(0,1) + theme(axis.text = element_text(size = 20), axis.title = element_
 ```
 ```{r}
 # Test different technical noise levels on the datasets
+data(gene_len_pool)
+gene_len <- sample(gene_len_pool, ngenes, replace = FALSE)
 observed_counts <- True2ObservedCounts(true_counts=true_counts_res[[1]], meta_cell=true_counts_res[[3]], protocol="UMI", alpha_mean=0.1, alpha_sd=0.1, gene_len=gene_len, depth_mean=1e5, depth_sd=3e3)
+observed_counts <- observed_counts$counts
 ```
 
 ```{r}
