@@ -135,7 +135,7 @@ p
 ```
 ```{r}
 # Calculate Kendall's tau and HIM scores 
-true_state_depth <- meta$depth
+true_state_depth <- meta[,'depth']
 tau <- cor.test(inferred_pseudotime, true_state_depth, method="kendall") 
 him <- calculate_him(true_net, trajectory$milestone_network)
 ```
