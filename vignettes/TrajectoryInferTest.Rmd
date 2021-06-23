@@ -16,8 +16,8 @@ knitr::opts_chunk$set(
 
 ```{r setup}
 library(devtools)
-devtools::load_all("~/TedSim/TedSim_1.00/TedSim")
-#library(TedSim)
+#devtools::load_all("~/TedSim/TedSim_1.00/TedSim")
+library(TedSim)
 
 library(dyno)
 library(umap)
