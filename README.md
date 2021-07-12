@@ -5,7 +5,7 @@ A simulator that simulates the cell division events from the root cell to presen
 
 ## Installation
 The R package for TedSim can be installed as:
-`devtools::install_github("xpan78/TedSim")`
+`devtools::install_github("Galaxeee/TedSim")`
 
 ## Usage
 An example usage of TedSim can be refered in vignettes.
