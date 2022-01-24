@@ -22,8 +22,8 @@ library(TedSim)
 
 # Parameter settings
 ```{r}
-ncells <- 1024
-phyla <- read.tree(text='((t1:3, (t2:2, t3:2):1):1);')
+ncells <- 512
+phyla <- read.tree(text='((t1:2, (t2:1, t3:1):1):1);')
 #phyla <- read.tree(text='((t1:2, t2:2):1, (t3:2, t4:2):1):2;')
 N_nodes <- 2*ncells-2
 ngenes <- 500
@@ -49,11 +49,32 @@ sif_mean_raw <- lapply(sif_mean_raw,function(X){
 sif_mean_raw <- do.call(cbind,sif_mean_raw)
 sif_pca <- prcomp(sif_mean_raw)
 
-plot_pca <- data.frame(label=sif_label,x=sif_pca$x[,1],y=sif_pca$x[,2])
+sif_label_new <- rep(1,length(sif_label))
+state_pos <- c(51,101,151,201,252,302,353,403,404,454,504,555,605)
+sif_label_new[51] <- 2    #"#FCC4C0"
+sif_label_new[101] <- 3    #"#F9938C"
+sif_label_new[151] <- 4    #"#F87F77"
+sif_label_new[201] <- 5    #"#F8766D"
+sif_label_new[252] <- 6    #"#D3C565"
+sif_label_new[302] <- 7    #"#B79F00"
+sif_label_new[353] <- 8    #"#7FDC9B"
+sif_label_new[403] <- 9    #"#00BA38"
+sif_label_new[404] <- 10    #"#EEEEEE"
+sif_label_new[454] <- 11    #"#A0C3FF"
+sif_label_new[504] <- 12    #"#619CFF"
+sif_label_new[555] <- 13    #"#F9A2EE"
+sif_label_new[605] <- 14    #"#F564E3"
+point_size <- rep(40,length(sif_label))
+point_size[state_pos] <- 100
+
+color_scale <- c("#999999","#FCC4C0","#F9938C","#F87F77","#F8766D","#D3C565","#B79F00","#7FDC9B","#00BA38","#EEEEEE","#A0C3FF","#619CFF","#F9A2EE","#F564E3")
+
+plot_pca <- data.frame(label=sif_label_new,x=sif_pca$x[,1],y=sif_pca$x[,2])
 p <- ggplot(plot_pca, aes(x, y))
-p <- p + geom_point(aes(colour = factor(plot_pca$label)),shape=20) + labs(color='cell states')
+p <- p + geom_point(aes(colour = factor(plot_pca$label),size = point_size)) + labs(color='cell states')
 p <- p+theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
              panel.background = element_blank(), axis.line = element_line(colour = "black"))
+p <- p + scale_colour_manual(values = color_scale)
 p
 ```
 

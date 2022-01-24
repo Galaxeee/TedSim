@@ -78,7 +78,9 @@ SIFGenerate <- function(phyla, n_diff, step = 1){
 #' @param S_parent current state of the parent node
 #' @param child child node label
 #' @param state_edges edge list of the cell state tree
-#' @param sif_mean edge list of the cell lineage
+#' @param sif_mean State identity Vector values
+#' @param p_edge the edge transition probability table, default is NULL so that the child edges are chosen with equal possibilities
+#' @param step sampling stepsize of diff-SIF Brownian motion
 WalkTree <- function(S_parent,child,state_edges,sif_mean, p_edge, step){
   S_child <- c(S_parent[1:3],child)
   #state_par <- S_parent[1] #previous state of par
@@ -218,7 +220,7 @@ CIF2Truecounts <- function(ngenes,ncif,ge_prob,ncells, cif_res, prop_hge = 0.015
     })
   })
 
-  chosen_hge <- sample(ngenes, ceiling(ngenes * prop_hge),
+    chosen_hge <- sample(ngenes, ceiling(ngenes * prop_hge),
                        replace = F)
   multi_factors <- numeric(length(chosen_hge))
   rank_sum <- rank(rowSums(params[[3]][chosen_hge, ]))

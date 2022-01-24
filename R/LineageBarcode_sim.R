@@ -56,7 +56,7 @@ generate_dropout <- function(barcode,mutation_cites){
 }
 
 
-#' Simulate Cell Identity Factor Matrix With Lineage Barcodes
+#' Simulate capture dropout based on observed counts and barcode data
 #' @param observed_counts Observed counts of gene expressions
 #' @param muts Unprocessed mutation barcodes
 #' @export

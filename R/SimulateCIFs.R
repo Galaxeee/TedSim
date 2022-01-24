@@ -1,6 +1,6 @@
 #' Simulate Cell Identity Factor Matrix With Lineage Barcodes
 #' @param ncells Number of Cells
-#' @param N_states Number of leaf states to generate the cell state tree
+#' @param phyla Cell state tree
 #' @param cif_center Mean of CIFs, default is 1
 #' @param Sigma Standard deviation of non-diff CIFs, difault is 0.5
 #' @param p_a The asymmetric division rate, default is 0.8
@@ -15,9 +15,10 @@
 #' @param unif_on sampling from synthetic uniform-distributed mutated states. When set FALSE, mutated states will be drawn from a real experimental dataset
 #' @param SIF_res Optional input for State Identity Factors. If not, the function will generate SIF internally.
 #' @param max_walk maximum walk distance of one asymmetric division on the cell state tree
+#' @param lambda a num vector that indicates the max and the min value of lambda that weights the additional random walk value
 #' @import ape
 #' @export
-SimulateCIFs <- function(ncells,phyla,cif_center=1, Sigma=0.5, p_a = 0.8,p_edge = NULL,n_CIF,n_diff,step = 1,p_d = 0.1,mu = 0.1, N_char = 9, N_ms = 100, unif_on = FALSE, SIF_res = NULL, max_walk = 2){
+SimulateCIFs <- function(ncells,phyla,cif_center=1, Sigma=0.5, p_a = 0.8,p_edge = NULL,n_CIF,n_diff,step = 1,p_d = 0.1,mu = 0.1, N_char = 9, N_ms = 100, unif_on = FALSE, SIF_res = NULL, max_walk = 2, lambda = 0.05){
   T_cell <- stree(ncells,type = "balanced")
   T_cell$edge.length <- rep(1, length(T_cell$edge[,1]))
   N_nodes <- length(T_cell$edge[,1])+1
@@ -54,13 +55,24 @@ SimulateCIFs <- function(ncells,phyla,cif_center=1, Sigma=0.5, p_a = 0.8,p_edge 
 
   State_table <- SimulateCellStates(cell_root,cell_edges,state_edges,sif_mean = sif_mean[[1]],S = S,p_a = p_a,p_edge,max_walk = max_walk)
 
+  if(length(lambda)==1){
+    lambda <- rep(lambda,log2(ncells))
+  }else if(length(lambda)==2){
+    temp <- approx(lambda,  n=log2(ncells))
+    lambda <- temp$y
+  }else{
+    stop("Input of lambda has more than 2 entries.")
+  }
+
   root_barcode <- rep(0,N_char)
-  neutral <- Samplelineage(Node_cell,0,cif_center, edges = cell_edges, edges_state=state_edges,sif_mean=sif_mean,S = State_table,cif = 1, p_a = p_a,p_d = p_d, mu = mu, flag = 1, barcode = root_barcode, N_ms = N_ms, unif_on = unif_on)
+  neutral <- Samplelineage(Node_cell,0,cif_center, edges = cell_edges, edges_state=state_edges,sif_mean=sif_mean,S = State_table,cif = 1, p_a = p_a,p_d = p_d, mu = mu, flag = 1, barcode = root_barcode, N_ms = N_ms, unif_on = unif_on,lambda = lambda)
   muts <- neutral[,5:length(neutral[1,])]
 
   param_names <- c("kon", "koff", "s")
   N_DE_cifs = c(0,0,n_diff)
   N_ND_cifs =c(n_CIF,n_CIF,n_CIF-n_diff)
+
+
   cifs <- lapply(c(1:3),function(parami){
     nd_cif <- lapply(c(1:N_ND_cifs[parami]),function(icif){
       rnorm(N_nodes-1,cif_center,Sigma)
@@ -69,7 +81,7 @@ SimulateCIFs <- function(ncells,phyla,cif_center=1, Sigma=0.5, p_a = 0.8,p_edge 
     if(N_DE_cifs[parami]!=0){
       #if there is more than 1 de_cifs for the parameter we are looking at
       de_cif <- lapply(c(1:N_DE_cifs[parami]),function(cif_i){
-        Samplelineage(Node_cell,0,cif_center,edges=cell_edges,edges_state=state_edges,sif_mean=sif_mean,S = State_table, p_a = p_a,cif=cif_i, flag = 0)
+        Samplelineage(Node_cell,0,cif_center,edges=cell_edges,edges_state=state_edges,sif_mean=sif_mean,S = State_table, p_a = p_a,cif=cif_i, flag = 0,lambda = lambda)
       })
 
       de_cif <- lapply(de_cif,function(X){X[,4]})

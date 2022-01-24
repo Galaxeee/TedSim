@@ -13,7 +13,11 @@ WalkTree(S_parent, child, state_edges, sif_mean, p_edge, step)
 
 \item{state_edges}{edge list of the cell state tree}
 
-\item{sif_mean}{edge list of the cell lineage}
+\item{sif_mean}{State identity Vector values}
+
+\item{p_edge}{the edge transition probability table, default is NULL so that the child edges are chosen with equal possibilities}
+
+\item{step}{sampling stepsize of diff-SIF Brownian motion}
 }
 \description{
 Find the child state based on parent state and step size
