@@ -40,7 +40,7 @@ Samplelineage <- function(par,depth,anc_state,edges, muts = NULL,p_d = 0.1, mu =
     return(result)
   })
   result<-do.call(rbind,result)
-  result <-result[!duplicated(result[,4]),]
+  result <-result[!duplicated(result[,4],fromLast = TRUE),]
   result<- result[order(result[,2]),]
   return(result)
 }
