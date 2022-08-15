@@ -2,7 +2,7 @@
 % Please edit documentation in R/GE_LB_sim.R
 \name{Generate_profile_multi}
 \alias{Generate_profile_multi}
-\title{Simulate Cell Identity Factor Matrix With Lineage Barcodes}
+\title{Generate joint profile of gene expression and lineage barcode for output}
 \usage{
 Generate_profile_multi(observed_counts, muts, states)
 }
@@ -14,5 +14,5 @@ Generate_profile_multi(observed_counts, muts, states)
 \item{states}{cell states}
 }
 \description{
-Simulate Cell Identity Factor Matrix With Lineage Barcodes
+Generate joint profile of gene expression and lineage barcode for output
 }

@@ -41,7 +41,7 @@ n_diff <- 20
 cif_step <- 0.25
 p_d <- 0
 N_char <- 32
-set.seed(145)
+set.seed(555)
 
 returnlist <- SIFGenerate(phyla,n_diff,step = cif_step)
 sif_mean_raw <- returnlist$sif_mean_raw
@@ -98,6 +98,14 @@ meta <- states_leaves
 rownames(counts_t) <- paste("cell",  meta[,'cellID'], sep = "_")
 colnames(counts_t) <- paste("gene", seq(1, ncol(counts_t)), sep = "_")
 
+order <- c()
+for (cluster in c(1,2,7,3,4,8,6)){
+  order <- c(order,which(meta[,'cluster'] == cluster))
+}
+
+counts_t <- counts_t[order,]
+meta <- meta[order,]
+
 custom.config = umap.defaults
 custom.config$min_dist = 0.3
 pca_res <- prcomp(counts_t, scale. = TRUE)
@@ -130,7 +138,7 @@ true_net <- data.frame(from=phyla$edge[,1],
 method <- "paga_tree"
 trajectory <- infer_trajectory(dataset,method,verbose = TRUE, give_priors = c("start_id","group_id"))
 
-p <- plot_dimred(trajectory, dimred = dataset$dimred, grouping = dataset$prior_information$groups_id)
+p <- plot_dimred(trajectory, dimred = dataset$dimred, grouping = dataset$prior_information$groups_id, color_cells = "grouping")
 p
 ```
 ```{r}

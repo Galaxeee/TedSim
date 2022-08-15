@@ -20,11 +20,14 @@ SimulateCIFs(
   N_ms = 100,
   unif_on = FALSE,
   SIF_res = NULL,
-  max_walk = 2
+  max_walk = 2,
+  lambda = 0.05
 )
 }
 \arguments{
 \item{ncells}{Number of Cells}
+
+\item{phyla}{Cell state tree}
 
 \item{cif_center}{Mean of CIFs, default is 1}
 
@@ -54,7 +57,7 @@ SimulateCIFs(
 
 \item{max_walk}{maximum walk distance of one asymmetric division on the cell state tree}
 
-\item{N_states}{Number of leaf states to generate the cell state tree}
+\item{lambda}{a num vector that indicates the max and the min value of lambda that weights the additional random walk value}
 }
 \description{
 Simulate Cell Identity Factor Matrix With Lineage Barcodes

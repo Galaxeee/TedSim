@@ -15,15 +15,16 @@
 #' @param barcode current barcode of the parent node
 #' @param N_ms Number of possible mutated states
 #' @param unif_on if unif_on is TRUE, the mutated states will be synthetically generated using uniform distribution; otherwise, it will be sampled from a real dataset
-Samplelineage <- function(par,depth,anc_state,edges, muts = NULL,p_d = 0.1, mu = 0.1,edges_state,sif_mean=NULL,S = NULL, p_a = 0.8,cif=NULL,flag=NULL, barcode = NULL, N_ms = NULL, unif_on = FALSE){
+#' @param lambda a num vector that indicates the value of lambda that weights the additional random walk value for different depths
+Samplelineage <- function(par,depth,anc_state,edges, muts = NULL,p_d = 0.1, mu = 0.1,edges_state,sif_mean=NULL,S = NULL, p_a = 0.8,cif=NULL,flag=NULL, barcode = NULL, N_ms = NULL, unif_on = FALSE, lambda = NULL){
   children <- edges[edges[,2]==par,3] # get the children of the current node
   result<-lapply(c(1:length(children)),function(j){
     edge<-edges[edges[,2]==par & edges[,3]==children[j],] # given the parent and child, find the edge
     if(sum(edges[,2]==children[j])==0){
-      result <- SampleEdgeNew(edge,depth,anc_state,edges,sif_mean = sif_mean,S=S,cif = cif, mu = mu,p_d = p_d, barcode = barcode, flag = flag,N_ms = N_ms, unif_on = unif_on)
+      result <- SampleEdgeNew(edge,depth,anc_state,edges,sif_mean = sif_mean,S=S,cif = cif, mu = mu,p_d = p_d, barcode = barcode, flag = flag,N_ms = N_ms, unif_on = unif_on,lambda = lambda)
       result <- result[c(1:(length(result[,1]-1))),]
     }else{
-      result <- SampleEdgeNew(edge,depth,anc_state,edges,sif_mean = sif_mean,S=S,cif = cif, mu = mu,p_d = p_d, barcode = barcode, flag = flag,N_ms = N_ms, unif_on = unif_on)
+      result <- SampleEdgeNew(edge,depth,anc_state,edges,sif_mean = sif_mean,S=S,cif = cif, mu = mu,p_d = p_d, barcode = barcode, flag = flag,N_ms = N_ms, unif_on = unif_on,lambda = lambda)
       anc_state <- result[length(result[,1]),4]
       if (flag ==1){
         barcode <- result[length(result[,1]),5:length(result[1,])]
@@ -33,13 +34,13 @@ Samplelineage <- function(par,depth,anc_state,edges, muts = NULL,p_d = 0.1, mu =
       result <- result[c(1:(length(result[,1]-1))),]
 
       depth <- depth + edge[4]
-      result1 <- Samplelineage(children[j],depth,anc_state,edges,edges_state=edges_state,sif_mean=sif_mean,S = S, p_a = p_a,cif=cif,flag = flag,mu = mu, p_d = p_d,barcode = barcode,N_ms = N_ms, unif_on = unif_on)
+      result1 <- Samplelineage(children[j],depth,anc_state,edges,edges_state=edges_state,sif_mean=sif_mean,S = S, p_a = p_a,cif=cif,flag = flag,mu = mu, p_d = p_d,barcode = barcode,N_ms = N_ms, unif_on = unif_on,lambda = lambda)
       result <- rbind(result,result1)
     }
     return(result)
   })
   result<-do.call(rbind,result)
-  result <-result[!duplicated(result[,4],fromLast=TRUE),]
+  result <-result[!duplicated(result[,4],fromLast = TRUE),]
   result<- result[order(result[,2]),]
   return(result)
 }
@@ -58,9 +59,8 @@ Samplelineage <- function(par,depth,anc_state,edges, muts = NULL,p_d = 0.1, mu =
 #' @param flag whether or not generate barcode along with gene expressions
 #' @param N_ms Number of possible mutated states
 #' @param unif_on if unif_on is TRUE, the mutated states will be synthetically generated using uniform distribution; otherwise, it will be sampled from a real dataset
-SampleEdgeNew <- function(edge,depth,anc_state,edges,sif_mean=NULL,S=NULL,cif = NULL, mu = 0.1,p_d = 0, barcode = NULL, flag = 0, N_ms = NULL, unif_on = FALSE){
-  a = 0.75
-  b = 0.25
+#' @param lambda a num vector that indicates the value of lambda that weights the additional random walk value for different depths
+SampleEdgeNew <- function(edge,depth,anc_state,edges,sif_mean=NULL,S=NULL,cif = NULL, mu = 0.1,p_d = 0, barcode = NULL, flag = 0, N_ms = NULL, unif_on = FALSE, lambda = NULL){
   state_prev <- S[edge[2],]
   state <- S[edge[3],]
   cifs <- sif_mean[[cif]]
@@ -69,7 +69,7 @@ SampleEdgeNew <- function(edge,depth,anc_state,edges,sif_mean=NULL,S=NULL,cif = 
   t_sample<-c(0,seq(0, edge[4], edge[4]))
   t_interval<-diff(t_sample)
   x_change <- sapply(t_interval,function(sig){rnorm(1,0,sqrt(sig))})[2]
-  x_sample <- a*(state_mean-state_mean_prev)+b*cumsum(x_change)
+  x_sample <- state_mean-state_mean_prev+lambda[depth+1]*cumsum(x_change)
   if (flag ==1){
     child_barcode <- barcode
     state_dist <- Mutated_state_dist(N_ms, cm)
@@ -84,7 +84,7 @@ SampleEdgeNew <- function(edge,depth,anc_state,edges,sif_mean=NULL,S=NULL,cif = 
   return(result)
 }
 
-#' Simulate Cell Identity Factor Matrix With Lineage Barcodes
+#' Generate joint profile of gene expression and lineage barcode for output
 #' @param observed_counts Observed gene expression matrix
 #' @param muts lineage character matrix
 #' @param states cell states

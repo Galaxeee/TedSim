@@ -1,0 +1,374 @@
+---
+title: "responses_NAR"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{responses_NAR}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+#library(TedSim)
+library(devtools)
+library('dichromat')
+library(scales)
+devtools::load_all("~/TedSim/TedSim_1.00/TedSim")
+```
+
+```{r}
+mu <- 0.1
+p_d <- 1
+ncells <- 1024
+i <- 1
+phyla <- read.tree(text='((t1:2, (t2:1, t3:1):1):1);')
+
+counts_dir <- sprintf("~/TedSim/datasets/NAR_test/counts_barcoded_tedsim_mu%g_p_d%g_%g_%g.txt", 
+                      mu, p_d,ncells, i)
+cell_meta_dir <- sprintf("~/TedSim/datasets/NAR_test/cell_meta_tedsim_mu%g_p_d%g_%g_%g.txt", 
+                    mu, p_d,ncells,  i)
+character_matrix_dir <- sprintf("~/TedSim/datasets/NAR_test/character_matrix_tedsim_mu%g_p_d%g_%g_%g.txt", 
+                                mu, p_d,ncells,  i)
+
+muts <- read.table(character_matrix_dir,sep = "\t")
+cell_meta <- read.csv(cell_meta_dir)
+cell_meta <- data.frame(sapply(cell_meta, as.numeric))
+counts <- read.table(counts_dir,sep = "\t",stringsAsFactors = FALSE)
+
+counts_t <- counts[2:(ncells+1),4:501]
+counts_t <- as.matrix(sapply(counts_t, as.numeric))
+rownames(counts_t) <- counts[2:(ncells+1),1]
+colnames(counts_t) <- paste("gene", seq(1, ncol(counts_t)), sep = "_")
+
+states_leaves <- cell_meta[,2:5]
+
+```
+
+```{r}
+colors <- hue_pal()(6)
+color <- states_leaves[,'cluster']
+for (cluster in unique(states_leaves[,'cluster'])){
+  depth_range <- sort(unique(states_leaves[states_leaves[,'cluster']==cluster,'depth']))
+  edge <- phyla$edge[phyla$edge[,2] == cluster]
+  #colfunc<-colorRampPalette(c(colors[edge[1]],colors[edge[2]]))
+  colfunc<-colorRampPalette(c('#FFFFFF',colors[edge[2]]))
+  color_grad <- colfunc(length(depth_range)+2)
+  color_grad <- color_grad[0:-2]
+  
+  #plot(rep(1,length(depth_range)),col=color_grad,pch=19,cex=3)
+  print(color_grad)
+  
+  color_sub <- states_leaves[states_leaves[,'cluster']==cluster,'depth']
+  color_sub[color_sub %in% depth_range] <- color_grad[match(color_sub, depth_range, nomatch = 0)]
+  color[color == cluster] <- color_sub
+}
+states_leaves <- cbind(states_leaves,color)
+
+umap_true_counts <- PlotUmap(meta=states_leaves, data=log2(t(counts_t)+1), n_pc=30, label='cluster', saving = F, plotname="Differentiating population (true counts)")
+
+# create a character vector of colornames
+colr <- as.character(unique(states_leaves[,'color']))
+plot_umap <- umap_true_counts[[1]] 
+p <- ggplot(plot_umap, aes(x, y))
+p <- p + geom_point(aes(colour = as.factor(states_leaves[,'color'])),shape=20,size = 5) + labs(color='cell state')
+p <- p+theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(), axis.line = element_line(colour = "black"))
+p <- p + scale_color_manual(breaks=unique(states_leaves[,'color']), values=colr)
+p + theme(legend.position = "none") + ggtitle("Continuous population (true counts)") + xlab("UMAP 1") + ylab("UMAP 2") +  theme(axis.text = element_text(size = 20), axis.title = element_text(size = 30),legend.text = element_text(size = 20))
+```
+
+```{r}
+dm <- DiffusionMap(data=log2(counts_t+1),n_pcs = 50)
+tsne_true_counts <- PlotTsne(meta=states_leaves, data=log2(t(counts_t)+1), cif_type="continuous", n_pc=30, label='cluster', saving = F, plotname="Discrete population (true counts)")
+
+colr <- as.character(unique(states_leaves[,'color']))
+plot_dm <- dm 
+p <- ggplot(plot_dm, aes(DC1, DC2))
+p <- p + geom_point(aes(colour = as.factor(states_leaves[,'color'])),shape=20,size = 5) + labs(color='cell state')
+p <- p+theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(), axis.line = element_line(colour = "black"))
+p <- p + scale_color_manual(breaks=unique(states_leaves[,'color']), values=colr)
+p + theme(legend.position = "none") + ggtitle("Continuous population (true counts)") + xlab("DC 1") + ylab("DC 2") +  theme(axis.text = element_text(size = 20), axis.title = element_text(size = 30),legend.text = element_text(size = 20))
+
+
+colr <- as.character(unique(states_leaves[,'color']))
+plot_tsne <- tsne_true_counts[[1]] 
+p <- ggplot(plot_tsne, aes(x, y))
+p <- p + geom_point(aes(colour = as.factor(states_leaves[,'color'])),shape=20,size = 5) + labs(color='cell state')
+p <- p+theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(), axis.line = element_line(colour = "black"))
+p <- p + scale_color_manual(breaks=unique(states_leaves[,'color']), values=colr)
+p + theme(legend.position = "none") + ggtitle("Continuous population (true counts)") + xlab("TSNE 1") + ylab("TSNE 2") +  theme(axis.text = element_text(size = 20), axis.title = element_text(size = 30),legend.text = element_text(size = 20))
+```
+
+```{r}
+p_d <- 1
+dist_data <- data.frame(ncells = numeric(),dist = numeric(),type = character())
+for (ncells in c(512,1024)){
+  for (i in 1:5){
+    N_nodes <- 2*ncells-2
+    counts_dir <- sprintf("~/TedSim/datasets/NAR_test_new/counts_barcoded_tedsim_mu%g_p_d%g_%g_%g.txt", 
+                      mu, p_d,ncells, i)
+    cell_meta_dir <- sprintf("~/TedSim/datasets/NAR_test_new/cell_meta_tedsim_mu%g_p_d%g_%g_%g.txt", 
+                    mu, p_d,ncells,  i)
+    character_matrix_dir <- sprintf("~/TedSim/datasets/NAR_test_new/character_matrix_tedsim_mu%g_p_d%g_%g_%g.txt", 
+                                mu, p_d,ncells,  i)
+    muts <- read.table(character_matrix_dir,sep = "\t")
+    cell_meta <- read.csv(cell_meta_dir)
+    cell_meta <- data.frame(sapply(cell_meta, as.numeric))
+    counts <- read.table(counts_dir,sep = "\t",stringsAsFactors = FALSE)
+
+    counts_t <- counts[2:(N_nodes+1),4:ncol(counts)]
+    #counts_t <- log2(counts_t+1)
+    counts_t <- as.matrix(sapply(counts_t, as.numeric))
+    rownames(counts_t) <- counts[2:(N_nodes+1),1]
+    colnames(counts_t) <- paste("gene", seq(1, ncol(counts_t)), sep = "_")
+
+    states <- cell_meta[,2:5]
+    
+    T_cell <- stree(ncells,type = "balanced")
+    
+    division <- states$cellID
+    dist <- states$cellID
+    for (j in T_cell$edge[,2]){
+      edge <- T_cell$edge[T_cell$edge[,2] == j]
+      if (edge[1]!= 1025){
+        edge[1] <- edge[1]-1
+        if (edge[2] > 1024){
+          edge[2] <- edge[2]-1
+        }
+        state_par <- states$cluster[edge[1]]
+        depth_par <- states$depth[edge[1]]
+        state_child <- states$cluster[edge[2]]
+        depth_child <- states$depth[edge[2]]
+        
+        expression_par <- log2(counts_t[edge[1],]+1)
+        expression_child <- log2(counts_t[edge[2],]+1)
+        dist[edge[2]] <- sqrt(sum((expression_par - expression_child)^2))
+        if ((state_par == state_child)&(depth_par == depth_child)){
+          division[edge[2]] <- 'symmetric'
+        } else{
+          division[edge[2]] <- 'asymmetric'
+        }
+      }else{
+        division[edge[2]] <- 'Not applicable'
+      }
+    }
+    states$division <- division[1:dim(states)[1]]
+    states$dist <- dist
+    
+    dist_group <- c()
+    for (cluster in unique(states_leaves[,'cluster'])){
+      depth_range <- sort(unique(states_leaves[states_leaves[,'cluster']==cluster,'depth']))
+      for (depth in depth_range){
+        cells_group <- states_leaves[ which(states_leaves[,'cluster']==cluster & states_leaves[,'depth'] == depth),'cellID' ]
+        #cells_group <- states_leaves[(states_leaves[,'cluster']==cluster) & (states_leaves[,'depth'] == depth),'cellID']
+        if(length(cells_group)>1){
+          expression_group <- counts_t[cells_group,]
+          expression_group_central <- sweep(expression_group, 2, colMeans(expression_group))
+          sd_group <- apply(expression_group, 1, function(x){
+            sqrt(sum(x^2))
+          })
+          dist_group <- c(dist_group,sd_group)
+        }
+      }
+    }
+    
+    dist_data_temp <- data.frame(ncells = ncells,dist = as.numeric(dist_group))
+    dist_data <- rbind(dist_data,dist_data_temp)
+  }
+    
+  #   dist_group <- c()
+  #   for (cluster in unique(states_leaves[,'cluster'])){
+  #     depth_range <- sort(unique(states_leaves[states_leaves[,'cluster']==cluster,'depth']))
+  #     for (depth in depth_range){
+  #       cells_group <- states_leaves[ which(states_leaves[,'cluster']==cluster & states_leaves[,'depth'] == depth),'cellID' ]
+  #       #cells_group <- states_leaves[(states_leaves[,'cluster']==cluster) & (states_leaves[,'depth'] == depth),'cellID']
+  #       if(length(cells_group)>1){
+  #         expression_group <- counts_t[cells_group,]
+  #         expression_group_central <- sweep(expression_group, 2, colMeans(expression_group))
+  #         sd_group <- apply(expression_group, 1, function(x){
+  #           sqrt(sum(x^2))
+  #         })
+  #         dist_group <- c(dist_group,sd_group)
+  #       }
+  #     }
+  #   }
+  #   
+  #   dist_data_temp <- data.frame(ncells = ncells,dist = as.numeric(dist_group))
+  #   dist_data <- rbind(dist_data,dist_data_temp)
+  # }
+}
+
+dist_data <- as.data.frame(states)
+dist_data <- dist_data[(dist_data$division == "symmetric")|(dist_data$division == "asymmetric"),]
+dist_data$cellgroup <- as.factor(dist_data$division)
+p <- ggplot(dist_data, aes(x=cellgroup, y=dist)) + 
+  geom_boxplot()
+p
+# Rotate the box plot
+p + coord_flip()
+# Notched box plot
+ggplot(ToothGrowth, aes(x=dose, y=len)) + 
+  geom_boxplot(notch=TRUE)
+# Change outlier, color, shape and size
+ggplot(ToothGrowth, aes(x=dose, y=len)) + 
+  geom_boxplot(outlier.colour="red", outlier.shape=8,
+                outlier.size=4)
+
+library(ggplot2)
+# Basic box plot
+dist_data$cellgroup <- as.factor(dist_data$ncells)
+p <- ggplot(dist_data, aes(x=cellgroup, y=dist)) + 
+  geom_boxplot()
+p
+# Rotate the box plot
+p + coord_flip()
+# Notched box plot
+ggplot(ToothGrowth, aes(x=dose, y=len)) + 
+  geom_boxplot(notch=TRUE)
+# Change outlier, color, shape and size
+ggplot(ToothGrowth, aes(x=dose, y=len)) + 
+  geom_boxplot(outlier.colour="red", outlier.shape=8,
+                outlier.size=4)
+```
+
+
+```{r}
+library(ape)
+Cassiopeia_tree <- read.tree("/home/xinhai/LinTIMaT/data/tree_cassiopeia_ZF1_F3.processed.newick")
+LinTIMaT_tree <- read.tree("/home/xinhai/LinTIMaT/data/ZF1_F3_nonbinary_tree_newick_for_visualization.txt")
+
+muts_ZF3_F3 <- read.table('/home/xinhai/LinTIMaT/data/cm_ZF1_F3.txt', sep = '\t')
+colnames(muts_ZF3_F3) <- muts_ZF3_F3[1,]
+rownames(muts_ZF3_F3) <- muts_ZF3_F3[,1]
+muts_ZF3_F3 <- muts_ZF3_F3[2:dim(muts_ZF3_F3)[1],2:dim(muts_ZF3_F3)[2]]
+muts_ZF3_F3 <- as.matrix(muts_ZF3_F3)
+
+Cassiopeia_tree$edge.length <- 1
+LinTIMaT_tree$edge.length <- rep(1,dim(LinTIMaT_tree$edge)[[1]])
+LinTIMaT_tree <- drop.tip(LinTIMaT_tree,'normal')
+```
+
+```{r}
+library(DCLEAR)
+library(phangorn)
+#DCLEAR
+#set.seed(1)
+mu_d1 = c( 30, 20, 10, 5, 5, 1, 0.01, 0.001)
+mu_d1 = mu_d1/sum(mu_d1)
+InfoW = -log(mu_d1)  ## entropy as their weights
+
+simn = 100 # number of cell samples
+m = 200  ## number of targets
+mu_d = 0.03 # mutation rate
+d = 12 # number of cell division
+p_d = 0.005 # dropout probability
+
+sim_tree <- list()
+for (i in 1:dim(muts_ZF3_F3)[1]){
+  sim_tree[[i]] <- c(muts_ZF3_F3[i,])
+  #names(sim_tree[[i]]) <- rownames(muts_leaves)[i]
+}
+
+names(sim_tree) <- rownames(muts_ZF3_F3)
+#nmstrings <- c('0','-',c(1:100))
+nmstrings <- unique(unlist(sim_tree))
+sim_data <- phyDat(sim_tree,type = 'USER',levels = nmstrings)
+
+#dist_wh2 <- WH(sim_data, InfoW, dropout=FALSE)
+dist_h <- dist.hamming(sim_data)
+
+
+Treenj = nj(dist_wh2)
+#TreeNJ_h <- multi2di(Treenj)
+TreeFM_wh2 = fastme.ols(dist_wh2)
+Treenj$edge.length <- rep(1, length(Treenj$edge.length))
+print( RF.dist(Treenj, LinTIMaT_tree, normalize = TRUE) )
+print( RF.dist(Cassiopeia_tree, LinTIMaT_tree, normalize = TRUE) )
+print( RF.dist(Cassiopeia_tree, Treenj, normalize = TRUE) )
+#print( RF.dist(Cassiopeia_tree, TreeFM_wh2, normalize = TRUE) )
+# print( RF.dist(LinTIMaT_tree, TreeFM_wh2, normalize = TRUE) )
+```
+
+```{r}
+phyla <- read.tree(text='((t1:2, (t2:1, t3:1):1):1);')
+p_a <- 0.6
+n_CIF <- 30
+n_diff <- 20
+evf_step <- 0.25
+max_walk <- 8
+mu <- 0.1
+p_d <- 1
+mu_list <- c(0.1) 
+pd_list <- c(1)
+ncells_list <- c(1024)
+seeds <- rnorm(1000)
+
+df <- data.frame(ncells = numeric(),division = character(),dist = numeric())
+for (ncells in ncells_list){
+  for (i in 1:3){
+    N_nodes <- 2*ncells-1
+    print(seeds[i])
+    set.seed(seeds[i])
+    seeds <- seeds[-i]
+    
+    evfs <- SimulateCIFs(ncells,phyla = phyla,p_a = p_a,n_CIF = n_CIF,n_diff = n_diff,step = evf_step, Sigma = 0.5, mu = mu, p_d = p_d, unif_on = FALSE,max_walk = max_walk)
+
+    evf_hidden <- evfs[[1]]
+  
+    EVF <- evfs[[1]][[3]]
+    #evf_res <- list(evf_all,evfs[[2]])
+    evf_res_hidden <- list(evf_hidden,evfs[[2]])
+    states <- evfs[[2]]
+    #states <- states[1:N_nodes,]
+    state_tree <-evfs[[3]]
+    T_cell <- evfs[[4]]
+    evf_mean <- evfs[[5]]
+    evf_label <- evfs[[6]]
+    colnames(states) <- c("parent","cluster","depth","cellID")
+    
+    #for (j in T_cell$edge[,2]){
+    for (j in 1:ncells){
+      edge <- T_cell$edge[T_cell$edge[,2]==j,]
+      if (edge[2] > ncells){
+        edge[2] <- edge[2]-1
+      }
+      CIF_child <- EVF[edge[2],]
+      state_child <- states[states[,"cellID"]==edge[2],"cluster"]
+      depth_child <- states[states[,"cellID"]==edge[2],"depth"]
+      if (edge[1] != ncells+1){
+        CIF_par <- EVF[edge[1]-1,]
+        state_par <- states[states[,"cellID"]==edge[1]-1,"cluster"]
+        depth_par <- states[states[,"cellID"]==edge[1]-1,"depth"]
+        
+        dist <- sqrt(sum((CIF_par-CIF_child)^2))
+        if ((state_par == state_child)&(depth_par == depth_child)){
+            division <- 'symmetric'
+          } else{
+            division <- 'asymmetric'
+          }
+        temp <- data.frame(ncells = ncells,division = division,dist = dist)
+        df <- rbind(df,temp)
+      }
+    }
+  }
+}
+
+ratio <- mean(df$dist[df$cellgroup == 'asymmetric'])/mean(df$dist[df$cellgroup == 'symmetric'])
+
+df$cellgroup <- as.factor(df$division)
+p <- ggplot(df, aes(x=cellgroup, y=dist)) + 
+  geom_boxplot()
+p
+
+```
+
+
+

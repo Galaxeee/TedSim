@@ -17,7 +17,8 @@ SampleEdgeNew(
   barcode = NULL,
   flag = 0,
   N_ms = NULL,
-  unif_on = FALSE
+  unif_on = FALSE,
+  lambda = NULL
 )
 }
 \arguments{
@@ -46,6 +47,8 @@ SampleEdgeNew(
 \item{N_ms}{Number of possible mutated states}
 
 \item{unif_on}{if unif_on is TRUE, the mutated states will be synthetically generated using uniform distribution; otherwise, it will be sampled from a real dataset}
+
+\item{lambda}{a num vector that indicates the value of lambda that weights the additional random walk value for different depths}
 }
 \description{
 Generate child CIF based on parent CIF

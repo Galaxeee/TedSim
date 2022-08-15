@@ -2,7 +2,7 @@
 % Please edit documentation in R/LineageBarcode_sim.R
 \name{CaptureDrop}
 \alias{CaptureDrop}
-\title{Simulate Cell Identity Factor Matrix With Lineage Barcodes}
+\title{Simulate capture dropout based on observed counts and barcode data}
 \usage{
 CaptureDrop(observed_counts, muts)
 }
@@ -12,5 +12,5 @@ CaptureDrop(observed_counts, muts)
 \item{muts}{Unprocessed mutation barcodes}
 }
 \description{
-Simulate Cell Identity Factor Matrix With Lineage Barcodes
+Simulate capture dropout based on observed counts and barcode data
 }
