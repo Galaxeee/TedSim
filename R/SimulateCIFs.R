@@ -16,10 +16,13 @@
 #' @param SIF_res Optional input for State Identity Factors. If not, the function will generate SIF internally.
 #' @param max_walk maximum walk distance of one asymmetric division on the cell state tree
 #' @param lambda a num vector that indicates the max and the min value of lambda that weights the additional random walk value
+#' @param T_cell optional, a cell division tree
 #' @import ape
 #' @export
-SimulateCIFs <- function(ncells,phyla,cif_center=1, Sigma=0.5, p_a = 0.8,p_edge = NULL,n_CIF,n_diff,step = 1,p_d = 0.1,mu = 0.1, N_char = 9, N_ms = 100, unif_on = FALSE, SIF_res = NULL, max_walk = 2, lambda = 0.05){
-  T_cell <- stree(ncells,type = "balanced")
+SimulateCIFs <- function(ncells,phyla,cif_center=1, Sigma=0.5, p_a = 0.8,p_edge = NULL,n_CIF,n_diff,step = 1,p_d = 0.1,mu = 0.1, N_char = 9, N_ms = 100, unif_on = FALSE, SIF_res = NULL, max_walk = 2, lambda = 0.05, T_cell = NULL){
+  if (is.null(T_cell)){
+    T_cell <- stree(ncells,type = "balanced")
+  }
   T_cell$edge.length <- rep(1, length(T_cell$edge[,1]))
   N_nodes <- length(T_cell$edge[,1])+1
   cell_edges <- cbind(T_cell$edge,T_cell$edge.length)
